@@ -1,0 +1,187 @@
+# Rebuild the HTML from scratch using the last saved final version logic
+met_activities = [
+    ("Sleeping", 0.9),
+    ("Watching TV", 1.0),
+    ("Typing / Desk work", 1.8),
+    ("Walking (2.7 km/h)", 2.3),
+    ("Walking (4.0 km/h)", 2.9),
+    ("Cycling (very light effort)", 3.0),
+    ("Walking (4.8 km/h)", 3.3),
+    ("Home exercise (light/moderate)", 3.5),
+    ("Walking (5.5 km/h)", 3.6),
+    ("Cycling (<16 km/h)", 4.0),
+    ("Cycling (light effort)", 5.5),
+    ("Jogging", 7.0),
+    ("Vigorous calisthenics", 8.0),
+    ("Running in place", 8.0),
+    ("Rope jumping", 10.0)
+]
+
+# Build HTML (summarized logic — identical to previous completed version)
+html_start = """<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calorie Calculator – MET & Nutrienten</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; background: #f9f9f9 }
+    label { display: block; margin-top: 1rem }
+    input, select { padding: 0.4rem; width: 100%; max-width: 300px }
+    button { margin-top: 1rem; padding: 0.5rem 1rem }
+    #result, #macroResult, #metResult { background: #fff; padding: 1rem; margin-top: 1rem; border-radius: 8px }
+    details { margin-top: 0.5rem; font-size: 0.9rem }
+  </style>
+</head>
+<body>
+  <h1>Calorie Calculator</h1>
+  <label>Geslacht</label>
+  <select id="gender">
+    <option value="male">Man</option>
+    <option value="female">Vrouw</option>
+  </select>
+  <label>Leeftijd (jaren)</label>
+  <input type="number" id="age" />
+  <label>Lengte (cm)</label>
+  <input type="number" id="height" />
+  <label>Gewicht (kg)</label>
+  <input type="number" id="weight" />
+  <label>Gewenst gewicht (optioneel)</label>
+  <input type="number" id="goalweight" />
+  <label>Activiteitsniveau (PAL)</label>
+  <select id="activity">
+    <option value="1.2">Zittend – weinig beweging</option>
+    <option value="1.375">Licht actief – 1-3x/week</option>
+    <option value="1.55">Matig actief – 3-5x/week</option>
+    <option value="1.725">Actief – bijna dagelijks</option>
+    <option value="1.9">Zeer actief – dagelijks intensief</option>
+  </select>
+  <button onclick="calc()">Bereken</button>
+  <div id="result"></div>
+  <details><summary>Meer info over macro’s en micro’s</summary>
+    <div id="macroResult"></div>
+  </details>
+  <h2>Professionele modus</h2>
+  <input type="text" id="profUser" placeholder="Gebruikersnaam"><br>
+  <input type="password" id="profPass" placeholder="Wachtwoord"><br>
+  <button onclick="unlockProf()">Inloggen</button>
+  <div id="metSection" style="display:none;">
+  <label>Selecteer activiteit</label>
+  <select id="metActivity">
+"""
+
+met_options = "".join(f'<option value="{val}">{name} ({val} MET)</option>' for name, val in met_activities)
+
+html_middle = """
+  </select>
+  <label>Duur (uren)</label>
+  <input type="number" id="metHours" value="1" min="0" step="0.25"/>
+  <button onclick="calcMET()">Bereken MET-verbruik</button>
+  <div id="metResult"></div>
+  </div>
+  <script>
+    function unlockProf() {
+      const user = document.getElementById("profUser").value.trim();
+      const pass = document.getElementById("profPass").value.trim();
+      if (user === "trainer" && pass === "fit2025") {
+        document.getElementById("metSection").style.display = "block";
+      } else {
+        alert("Ongeldige login.");
+      }
+    }
+
+    function calc() {
+      const gender = document.getElementById("gender").value;
+      const age = parseFloat(document.getElementById("age").value);
+      const height = parseFloat(document.getElementById("height").value);
+      const weight = parseFloat(document.getElementById("weight").value);
+      const activity = parseFloat(document.getElementById("activity").value);
+      const goalweight = parseFloat(document.getElementById("goalweight").value);
+
+      if (!age || !height || !weight || !activity) {
+        alert("Vul alle velden correct in.");
+        return;
+      }
+
+      const bmr = gender === "male"
+        ? 10 * weight + 6.25 * height - 5 * age + 5
+        : 10 * weight + 6.25 * height - 5 * age - 161;
+
+      const tdee = bmr * activity;
+      const tef = tdee * 0.10;
+      const maintain = tdee;
+      const cut = tdee * 0.90;
+      const bulk = tdee * 1.10;
+
+      let doel = "Gewicht behouden";
+      let aanbevolen = maintain;
+      if (!isNaN(goalweight)) {
+        if (weight > goalweight) {
+          doel = "Afvallen naar " + goalweight + " kg";
+          aanbevolen = cut;
+        } else if (weight < goalweight) {
+          doel = "Aankomen naar " + goalweight + " kg";
+          aanbevolen = bulk;
+        }
+      }
+
+      let eiwitPerKg = 0.83;
+      if (activity >= 1.55 && activity < 1.9) {
+        eiwitPerKg = 1.5;
+      } else if (activity >= 1.9) {
+        eiwitPerKg = 1.9;
+      }
+
+      const targetWeight = !isNaN(goalweight) ? goalweight : weight;
+      const eiwit = Math.round(targetWeight * eiwitPerKg);
+      const vetKcal = maintain * 0.30;
+      const vet = Math.round(vetKcal / 9);
+      const koolhydraten = Math.round((maintain - (eiwit * 4) - vetKcal) / 4);
+
+      const vitC = Math.round(weight * 1.2);
+      const calcium = Math.round(weight * 12);
+      const ijzer = Math.round(weight * 0.2);
+      const magnesium = Math.round(weight * 4);
+
+      document.getElementById("result").innerHTML =
+        "<strong>Doel:</strong> " + doel + "<br>" +
+        "<strong>BMR:</strong> " + Math.round(bmr) + " kcal<br>" +
+        "<strong>TDEE:</strong> " + Math.round(tdee) + " kcal<br>" +
+        "<strong>TEF (~10%):</strong> " + Math.round(tef) + " kcal<br>" +
+        "<strong>Afvallen:</strong> " + Math.round(cut) + " kcal/dag<br>" +
+        "<strong>Aankomen:</strong> " + Math.round(bulk) + " kcal/dag";
+
+      document.getElementById("macroResult").innerHTML =
+        "<u>Macronutriënten:</u><br>" +
+        "Eiwit: " + eiwit + " g (" + eiwitPerKg + " g/kg)<br>" +
+        "Vet: " + vet + " g<br>" +
+        "Koolhydraten: " + koolhydraten + " g<br><br>" +
+        "<u>Micronutriënten (geschaald op gewicht):</u><br>" +
+        "Vitamine C: " + vitC + " mg<br>" +
+        "Vitamine D: 10 µg<br>" +
+        "Calcium: " + calcium + " mg<br>" +
+        "IJzer: " + ijzer + " mg<br>" +
+        "Magnesium: " + magnesium + " mg";
+    }
+
+    function calcMET() {
+      const weight = parseFloat(document.getElementById("weight").value);
+      const met = parseFloat(document.getElementById("metActivity").value);
+      const hours = parseFloat(document.getElementById("metHours").value);
+      if (!weight || !met || !hours) return;
+      const kcal = Math.round(met * weight * hours);
+      document.getElementById("metResult").innerHTML = "Verbruik: " + kcal + " kcal";
+    }
+  </script>
+</body>
+</html>
+"""
+
+full_html = html_start + met_options + html_middle
+
+# Save to file
+final_path = "/mnt/data/calorie_calculator_final_with_goal_and_pro_mode.html"
+with open(final_path, "w", encoding="utf-8") as f:
+    f.write(full_html)
+
+final_path
